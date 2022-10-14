@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+
+     <node pkg="rviz" type="rviz" name="rviz" args="-d $(find adjust_local_goal)/config/adjust_local_goal.rviz"/>
+    <node pkg="adjust_local_goal" type="adjust_local_goal" name="adjust_local_goal">
+        <param name="HZ" value="20" />
+        <param name="DIVIDE" value="10" />
+        <param name="MAP_COST_GAIN" value="1.0" />
+        <param name="DISTANCE_GAIN" value="1.0" />
+        <remap from="local_goal" to="local_goal" />
+        <remap from="local_map/expand" to="local_map/expand" />
+        <remap from="adjust_local_goal" to="adjust_local_goal" />
+    </node>
+</launch>
