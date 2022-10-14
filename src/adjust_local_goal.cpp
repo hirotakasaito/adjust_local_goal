@@ -5,7 +5,7 @@ AdjustLocalGoal::AdjustLocalGoal(void)
 {
     nh.param("HZ", HZ, {50});
     nh.param("DIVIDE", divide, {10});
-    nh.param("MAP_COST_GAIN", MAP_COST_GAIN, {1.0});
+    nh.param("MAP_COST_GAIN", MAP_COST_GAIN, {10.0});
     nh.param("DISTANCE_GAIN", DISTANCE_GAIN, {1.0});
 
     ROS_INFO("===param===");
@@ -34,6 +34,11 @@ void AdjustLocalGoal::local_map_callback(const nav_msgs::OccupancyGrid::ConstPtr
     if(local_map.data.size() != 0) local_map_updated = true;
 }
 
+double AdjustLocalGoal::sigmoid(double x, double gain)
+{
+      return 1.0 / (1.0 + exp(-gain * x));
+}
+
 void AdjustLocalGoal::adjust_local_goal(void)
 {
     column = local_map.info.height;
@@ -45,6 +50,8 @@ void AdjustLocalGoal::adjust_local_goal(void)
     local_goal_index_y = int(-1 * local_goal.pose.position.y / resolution + row/2);
 
     float min_cost = 5e5;
+    float max_dis = 0.0;
+    float max_map_cost = 0.0;
 
     if(local_map.data[local_goal_index_x*row + local_goal_index_y] == 100)
     {
@@ -58,7 +65,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
             {
                 map_cost = 0;
                 min_dis = 5e5;
-                enable_change = false;
                 for(int i=0; i<divide_resolution; i++)
                 {
                     for(int j=0; j<divide_resolution; j++)
@@ -78,6 +84,7 @@ void AdjustLocalGoal::adjust_local_goal(void)
                                 dis_min_j = j;
                             }
 
+
                             enable_change = true;
                         }
 
@@ -87,22 +94,48 @@ void AdjustLocalGoal::adjust_local_goal(void)
 
                     }
                 }
-                // if(!enable_change) break;
-                map_info.dr = dis_min_dr;
-                map_info.dc = dis_min_dc;
-                map_info.i = dis_min_i;
-                map_info.j = dis_min_j;
-                map_info.dis = min_dis;
-                map_info.map_cost = map_cost;
-                map_infos.push_back(map_info);
+
+                if(enable_change)
+                {
+                    enable_change = false;
+                    map_info.dr = dis_min_dr;
+                    map_info.dc = dis_min_dc;
+                    map_info.i = dis_min_i;
+                    map_info.j = dis_min_j;
+                    map_info.dis = min_dis;
+                    map_info.map_cost = map_cost;
+                    map_infos.push_back(map_info);
+                }
+
+                if(min_dis != 5e5 && min_dis > max_dis)
+                {
+                    max_dis = min_dis;
+                }
+
+                if(map_cost > max_map_cost)
+                {
+                    max_map_cost = map_cost;
+                }
 
             }
         }
 
+
         for(const auto& map_info : map_infos)
         {
+            normalize_map_cost = map_info.map_cost / max_map_cost;
+            normalize_dis = map_info.dis / max_dis;
+            // ROS_INFO_STREAM("max dis");
+            // ROS_INFO_STREAM(max_dis);
+            // ROS_INFO_STREAM("map_dis");
+            // ROS_INFO_STREAM(map_info.dis);
+            //
+            // ROS_INFO_STREAM("normalize_dis");
+            // ROS_INFO_STREAM(normalize_dis);
+            // ROS_INFO_STREAM("normalize_map_cost");
+            // ROS_INFO_STREAM(normalize_map_cost);
 
-            cost = MAP_COST_GAIN * map_info.map_cost + DISTANCE_GAIN * map_info.dis;
+            cost = MAP_COST_GAIN * normalize_map_cost + DISTANCE_GAIN * normalize_dis;
 
             if(cost < min_cost)
             {
@@ -113,7 +146,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
                 min_j = map_info.j;
             }
         }
-        // ROS_INFO_STREAM(min_cost);
     }
 
     geometry_msgs::PoseStamped adjust_local_goal;
@@ -121,7 +153,7 @@ void AdjustLocalGoal::adjust_local_goal(void)
     if(change_goal)
     {
         change_goal = false;
-        // ROS_INFO_STREAM(min_dc);
+        enable_change = false;
         adjust_local_goal_index_x = divide_resolution * min_dc + min_j;
         adjust_local_goal_index_y = divide_resolution * min_dr + min_i;
         adjust_local_goal.pose.position.x = (adjust_local_goal_index_x - column/2)*resolution;

@@ -25,10 +25,12 @@ private:
     void local_goal_callback(const geometry_msgs::PoseStampedConstPtr &);
     void local_map_callback(const nav_msgs::OccupancyGrid::ConstPtr &);
     void adjust_local_goal(void);
+    double sigmoid(double x, double SIGMOID_GAIN);
 
     int HZ;
     float MAP_COST_GAIN;
     float DISTANCE_GAIN;
+    float SIGMOID_GAIN;
     int local_goal_index_x = 0;
     int local_goal_index_y = 0;
     int adjust_local_goal_index_x;
@@ -53,7 +55,7 @@ private:
     int dis_min_j;
 
     int divide_resolution;
-    int map_cost;
+    float map_cost;
     int _map_cost;
     int in;
     int jn;
@@ -61,11 +63,14 @@ private:
     float dy;
     float dis;
     float min_dis;
-    float dis_min_dis;
-    bool enable_change;
+    float normalize_map_cost;
+    float max_map_cost;
+    float max_dis;
+    float normalize_dis;
     bool local_goal_updated;
     bool local_map_updated;
-    bool change_goal;
+    bool change_goal = false;
+    bool enable_change = false;
     // std::vector<std::vector<std::vector<std::vector<int>>>> divide_map;
     // std::vector<std::vector<std::vector<std::vector<int>>>> map;
     std::vector<int> map_costs;
