@@ -34,11 +34,6 @@ void AdjustLocalGoal::local_map_callback(const nav_msgs::OccupancyGrid::ConstPtr
     if(local_map.data.size() != 0) local_map_updated = true;
 }
 
-double AdjustLocalGoal::sigmoid(double x, double gain)
-{
-      return 1.0 / (1.0 + exp(-gain * x));
-}
-
 void AdjustLocalGoal::adjust_local_goal(void)
 {
     column = local_map.info.height;
@@ -57,7 +52,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
     {
        ROS_INFO_STREAM("change goal");
        change_goal = true;
-       // calc_safe_zone(local_goal_index_x,local_goal_index_y);
 
         for(int dr=0; dr<divide; dr++)
         {
@@ -125,15 +119,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
         {
             normalize_map_cost = map_info.map_cost / max_map_cost;
             normalize_dis = map_info.dis / max_dis;
-            // ROS_INFO_STREAM("max dis");
-            // ROS_INFO_STREAM(max_dis);
-            // ROS_INFO_STREAM("map_dis");
-            // ROS_INFO_STREAM(map_info.dis);
-            //
-            // ROS_INFO_STREAM("normalize_dis");
-            // ROS_INFO_STREAM(normalize_dis);
-            // ROS_INFO_STREAM("normalize_map_cost");
-            // ROS_INFO_STREAM(normalize_map_cost);
 
             cost = MAP_COST_GAIN * normalize_map_cost + DISTANCE_GAIN * normalize_dis;
 

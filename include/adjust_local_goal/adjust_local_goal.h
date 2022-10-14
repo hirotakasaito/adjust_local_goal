@@ -3,7 +3,6 @@
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/OccupancyGrid.h>
-#include <stdlib.h>
 
 struct Map_info
 {
@@ -25,12 +24,10 @@ private:
     void local_goal_callback(const geometry_msgs::PoseStampedConstPtr &);
     void local_map_callback(const nav_msgs::OccupancyGrid::ConstPtr &);
     void adjust_local_goal(void);
-    double sigmoid(double x, double SIGMOID_GAIN);
 
     int HZ;
     float MAP_COST_GAIN;
     float DISTANCE_GAIN;
-    float SIGMOID_GAIN;
     int local_goal_index_x = 0;
     int local_goal_index_y = 0;
     int adjust_local_goal_index_x;
@@ -57,8 +54,6 @@ private:
     int divide_resolution;
     float map_cost;
     int _map_cost;
-    int in;
-    int jn;
     float dx;
     float dy;
     float dis;
@@ -71,8 +66,6 @@ private:
     bool local_map_updated;
     bool change_goal = false;
     bool enable_change = false;
-    // std::vector<std::vector<std::vector<std::vector<int>>>> divide_map;
-    // std::vector<std::vector<std::vector<std::vector<int>>>> map;
     std::vector<int> map_costs;
     std::vector<Map_info> map_infos;
     Map_info map_info;
@@ -85,10 +78,6 @@ private:
 
     nav_msgs::OccupancyGrid local_map;
     geometry_msgs::PoseStamped local_goal;
-
-
-
-
 };
 
 #endif //__ADJUST_LOCAL_GOAL_H
