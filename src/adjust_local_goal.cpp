@@ -46,7 +46,7 @@ void AdjustLocalGoal::adjust_local_goal(void)
     geometry_msgs::TransformStamped static_transformStamped;
     static_transformStamped.header.stamp = ros::Time::now();
     static_transformStamped.header.frame_id = "local_map";
-    static_transformStamped.child_frame_id = "base";
+    static_transformStamped.child_frame_id = "base_link_from_local_map";
     static_transformStamped.transform.translation.x =row/2 * resolution;
     static_transformStamped.transform.translation.y =column/2 * resolution;
     static_transformStamped.transform.translation.z = 0.0;
@@ -61,7 +61,7 @@ void AdjustLocalGoal::adjust_local_goal(void)
 
     geometry_msgs::TransformStamped transformStamped;
     try{
-        transformStamped = tf_buffer.lookupTransform("local_map", "base",
+        transformStamped = tf_buffer.lookupTransform("local_map", "base_link_from_local_map",
                                                          ros::Time(0));
     }
     catch (tf2::TransformException &ex) {
@@ -80,8 +80,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
     }
 
     float min_cost = 5e10;
-    float max_dis = 0.0;
-    float max_map_cost = 0.0;
 
     if(local_map.data[local_goal_index_y*row + local_goal_index_x] == 100)
     {
@@ -136,26 +134,12 @@ void AdjustLocalGoal::adjust_local_goal(void)
                     map_infos.push_back(map_info);
                 }
 
-                // if(min_dis != 5e5 && min_dis > max_dis)
-                // {
-                //     max_dis = min_dis;
-                // }
-                //
-                // if(map_cost > max_map_cost)
-                // {
-                //     max_map_cost = map_cost;
-                // }
-
             }
         }
 
 
         for(const auto& map_info : map_infos)
         {
-            // normalize_map_cost = map_info.map_cost / max_map_cost;
-            // normalize_dis = map_info.dis / max_dis;
-
-            // cost = MAP_COST_GAIN * normalize_map_cost + DISTANCE_GAIN * normalize_dis;
             cost = MAP_COST_GAIN * map_info.map_cost + DISTANCE_GAIN * map_info.dis;
             enable_change = true;
 
@@ -166,7 +150,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
                 min_dc = map_info.dc;
                 min_i = map_info.i;
                 min_j = map_info.j;
-                // ROS_INFO_STREAM(map_info.map_cost);
             }
         }
     }
