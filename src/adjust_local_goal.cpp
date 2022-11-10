@@ -1,5 +1,4 @@
 #include "adjust_local_goal/adjust_local_goal.h"
-
 AdjustLocalGoal::AdjustLocalGoal(void)
     :nh("~")
 {
@@ -20,6 +19,8 @@ AdjustLocalGoal::AdjustLocalGoal(void)
 
     local_goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/adjust_local_goal", 1);
 
+    tf_listener = new tf2_ros::TransformListener(tf_buffer);
+
 }
 
 void AdjustLocalGoal::local_goal_callback(const geometry_msgs::PoseStampedConstPtr &msg)
@@ -37,22 +38,48 @@ void AdjustLocalGoal::local_map_callback(const nav_msgs::OccupancyGrid::ConstPtr
 void AdjustLocalGoal::adjust_local_goal(void)
 {
     column = local_map.info.height;
-    row = local_map.info.width;;
+    row = local_map.info.width;
     resolution = local_map.info.resolution;
-    double pi = M_PI;
     divide_resolution = row / divide;
 
-    // local_goal_index_x = int(local_goal.pose.position.x / resolution + column/2);
-    // local_goal_index_y = int(-1 * local_goal.pose.position.y / resolution + row/2);
+    static tf2_ros::StaticTransformBroadcaster static_broadcaster;
+    geometry_msgs::TransformStamped static_transformStamped;
+    static_transformStamped.header.stamp = ros::Time::now();
+    static_transformStamped.header.frame_id = "local_map";
+    static_transformStamped.child_frame_id = "base";
+    static_transformStamped.transform.translation.x =row/2 * resolution;
+    static_transformStamped.transform.translation.y =column/2 * resolution;
+    static_transformStamped.transform.translation.z = 0.0;
 
-    local_goal_index_x = int((local_goal.pose.position.x*std::cos(-pi/2) - local_goal.pose.position.y*std::sin(-pi/2)) / resolution) + row/2;
-    local_goal_index_y = int((local_goal.pose.position.x*std::cos(-pi/2) + local_goal.pose.position.y*std::sin(-pi/2))/resolution) + column/2;
-    ROS_INFO_STREAM("local_goal_index_x");
-    ROS_INFO_STREAM(local_goal_index_x);
-    ROS_INFO_STREAM("local_goal_index_y");
-    ROS_INFO_STREAM(local_goal_index_y);
+    tf2::Quaternion quat;
+    quat.setRPY(0.0, 0.0, M_PI/2);
+    static_transformStamped.transform.rotation.x = quat.x();
+    static_transformStamped.transform.rotation.y = quat.y();
+    static_transformStamped.transform.rotation.z = quat.z();
+    static_transformStamped.transform.rotation.w = quat.w();
+    static_broadcaster.sendTransform(static_transformStamped);
 
-    float min_cost = 5e5;
+    geometry_msgs::TransformStamped transformStamped;
+    try{
+        transformStamped = tf_buffer.lookupTransform("local_map", "base",
+                                                         ros::Time(0));
+    }
+    catch (tf2::TransformException &ex) {
+        ROS_WARN("%s",ex.what());
+    }
+
+    geometry_msgs::PoseStamped local_goal_from_map;
+    tf2::doTransform(local_goal, local_goal_from_map, transformStamped);
+
+    local_goal_index_x = int(local_goal_from_map.pose.position.x/resolution);
+    local_goal_index_y = int(local_goal_from_map.pose.position.y/resolution);
+
+    if(local_goal_index_y < 0.0 || local_goal_index_x < 0.0)
+    {
+        return;
+    }
+
+    float min_cost = 5e10;
     float max_dis = 0.0;
     float max_map_cost = 0.0;
 
@@ -65,13 +92,13 @@ void AdjustLocalGoal::adjust_local_goal(void)
         {
             for(int dc=0; dc<divide; dc++)
             {
-                map_cost = 0;
+                map_cost = 0.0;
                 min_dis = 5e5;
                 for(int i=0; i<divide_resolution; i++)
                 {
                     for(int j=0; j<divide_resolution; j++)
                     {
-                        if(local_map.data[(divide_resolution*dc+j)*row+(divide_resolution*dr+i)] == 0)
+                        if(local_map.data[(divide_resolution*dr+i)*row+(divide_resolution*dc+j)] == 0)
                         {
                             dx = ((divide_resolution*dr+i) - local_goal_index_x)*resolution;
                             dy = ((divide_resolution*dc+j) - local_goal_index_y)*resolution;
@@ -90,8 +117,7 @@ void AdjustLocalGoal::adjust_local_goal(void)
                             enable_change = true;
                         }
 
-                        _map_cost = local_map.data[(divide_resolution*dc+j)*row+(divide_resolution*dr+i)];
-                        ROS_INFO_STREAM(min_dis);
+                        _map_cost = local_map.data[(divide_resolution*dr+i)*row+(divide_resolution*dc+j)];
                         if(_map_cost == -1) _map_cost = 100;
                         map_cost += _map_cost;
 
@@ -110,15 +136,15 @@ void AdjustLocalGoal::adjust_local_goal(void)
                     map_infos.push_back(map_info);
                 }
 
-                if(min_dis != 5e5 && min_dis > max_dis)
-                {
-                    max_dis = min_dis;
-                }
-
-                if(map_cost > max_map_cost)
-                {
-                    max_map_cost = map_cost;
-                }
+                // if(min_dis != 5e5 && min_dis > max_dis)
+                // {
+                //     max_dis = min_dis;
+                // }
+                //
+                // if(map_cost > max_map_cost)
+                // {
+                //     max_map_cost = map_cost;
+                // }
 
             }
         }
@@ -131,6 +157,7 @@ void AdjustLocalGoal::adjust_local_goal(void)
 
             // cost = MAP_COST_GAIN * normalize_map_cost + DISTANCE_GAIN * normalize_dis;
             cost = MAP_COST_GAIN * map_info.map_cost + DISTANCE_GAIN * map_info.dis;
+            enable_change = true;
 
             if(cost < min_cost)
             {
@@ -139,22 +166,33 @@ void AdjustLocalGoal::adjust_local_goal(void)
                 min_dc = map_info.dc;
                 min_i = map_info.i;
                 min_j = map_info.j;
+                // ROS_INFO_STREAM(map_info.map_cost);
             }
         }
     }
 
     geometry_msgs::PoseStamped adjust_local_goal;
+    map_infos.clear();
 
-    if(change_goal)
+    if(change_goal && enable_change)
     {
         change_goal = false;
         enable_change = false;
 
-        adjust_local_goal_index_x = divide_resolution * min_dr + min_i - column/2;
-        adjust_local_goal_index_y = divide_resolution * min_dc + min_j - row/2;
+        geometry_msgs::PoseStamped adjust_local_goal_from_map;
 
-        adjust_local_goal.pose.position.x = adjust_local_goal_index_x*std::cos(pi/2) - adjust_local_goal_index_y*std::sin(pi/2)*resolution;
-        adjust_local_goal.pose.position.y = adjust_local_goal_index_y*std::cos(-pi/2) + adjust_local_goal_index_y*std::sin(-pi/2)*resolution;
+        geometry_msgs::PoseStamped adjust_local_goal;
+        adjust_local_goal_from_map.pose.position.x = (divide_resolution * min_dr + min_i)*resolution;
+        adjust_local_goal_from_map.pose.position.y = (divide_resolution * min_dc + min_j)*resolution;
+
+        tf2::Transform transform;
+        tf2::convert(transformStamped.transform, transform);
+        geometry_msgs::Transform tf;
+        tf2::convert(transform.inverse(), tf);
+        transformStamped.transform = tf;
+
+        tf2::doTransform(adjust_local_goal_from_map, adjust_local_goal, transformStamped);
+        adjust_local_goal.pose.position.z = local_goal.pose.position.z;
         adjust_local_goal.pose.orientation.x = local_goal.pose.orientation.x;
         adjust_local_goal.pose.orientation.y = local_goal.pose.orientation.y;
         adjust_local_goal.pose.orientation.z = local_goal.pose.orientation.z;
@@ -173,7 +211,8 @@ void AdjustLocalGoal::adjust_local_goal(void)
 void AdjustLocalGoal::process(void)
 {
     ros::Rate loop_rate(HZ);
-
+    local_map_updated = false;
+    local_goal_updated = false;
     while(ros::ok())
     {
 
