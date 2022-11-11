@@ -33,8 +33,10 @@ private:
     void adjust_local_goal(void);
 
     int HZ;
+    int SAFE_GRID;
     float MAP_COST_GAIN;
     float DISTANCE_GAIN;
+    float ADJUST_DIS;
     int local_goal_index_x = 0;
     int local_goal_index_y = 0;
     int adjust_local_goal_index_x;
@@ -61,8 +63,6 @@ private:
     int divide_resolution;
     float map_cost;
     int _map_cost;
-    float dx;
-    float dy;
     float dis;
     float min_dis;
     float normalize_map_cost;

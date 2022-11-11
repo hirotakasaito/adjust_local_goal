@@ -4,13 +4,17 @@ AdjustLocalGoal::AdjustLocalGoal(void)
 {
     nh.param("HZ", HZ, {50});
     nh.param("DIVIDE", divide, {10});
+    nh.param("SAFE_GRID", SAFE_GRID, {50});
+    nh.param("ADJUST_DIS", ADJUST_DIS, {2.0});
     nh.param("MAP_COST_GAIN", MAP_COST_GAIN, {10.0});
     nh.param("DISTANCE_GAIN", DISTANCE_GAIN, {1.0});
 
     ROS_INFO("===param===");
 
     ROS_INFO_STREAM("HZ: " <<HZ);
-    ROS_INFO_STREAM("divide: " <<divide);
+    ROS_INFO_STREAM("DIVIDE: " <<divide);
+    ROS_INFO_STREAM("SAFE_GRID: " <<SAFE_GRID);
+    ROS_INFO_STREAM("ADJUST_DIS: " <<ADJUST_DIS);
     ROS_INFO_STREAM("MAP_COST_GAIN: " <<MAP_COST_GAIN);
     ROS_INFO_STREAM("DISTANCE_GAIN: " <<DISTANCE_GAIN);
 
@@ -81,10 +85,24 @@ void AdjustLocalGoal::adjust_local_goal(void)
 
     float min_cost = 5e10;
 
-    if(local_map.data[local_goal_index_y*row + local_goal_index_x] == 100)
+
+    for(int serach_grid_x = local_goal_index_x - SAFE_GRID; serach_grid_x < (local_goal_index_x + SAFE_GRID); serach_grid_x++)
     {
-       ROS_INFO_STREAM("change goal");
-       change_goal = true;
+        for(int serach_grid_y = local_goal_index_y - SAFE_GRID; serach_grid_y< (local_goal_index_y + SAFE_GRID); serach_grid_y++)
+        {
+            if(local_map.data[serach_grid_y*row + serach_grid_x] == 100)
+            {
+                float dx = (serach_grid_x - local_goal_index_x)*resolution;
+                float dy = (serach_grid_y - local_goal_index_y)*resolution;
+                float dis = std::sqrt(std::pow(dx,2.0) + std::pow(dy,2.0));
+
+                if(dis < ADJUST_DIS) change_goal = true;
+            }
+        }
+    }
+
+    if(change_goal)
+    {
 
         for(int dr=0; dr<divide; dr++)
         {
@@ -98,11 +116,11 @@ void AdjustLocalGoal::adjust_local_goal(void)
                     {
                         if(local_map.data[(divide_resolution*dr+i)*row+(divide_resolution*dc+j)] == 0)
                         {
-                            dx = ((divide_resolution*dr+i) - local_goal_index_x)*resolution;
-                            dy = ((divide_resolution*dc+j) - local_goal_index_y)*resolution;
-                            dis = std::sqrt(std::pow(dx,2.0) + std::pow(dy,2.0));
+                            float dx = ((divide_resolution*dr+i) - local_goal_index_x)*resolution;
+                            float dy = ((divide_resolution*dc+j) - local_goal_index_y)*resolution;
+                            float dis = std::sqrt(std::pow(dx,2.0) + std::pow(dy,2.0));
 
-                            if(dis < min_dis)
+                            if(dis < min_dis && dis > ADJUST_DIS)
                             {
                                 min_dis = dis;
                                 dis_min_dr = dr;
@@ -161,7 +179,6 @@ void AdjustLocalGoal::adjust_local_goal(void)
     {
         change_goal = false;
         enable_change = false;
-
         geometry_msgs::PoseStamped adjust_local_goal_from_map;
 
         geometry_msgs::PoseStamped adjust_local_goal;
@@ -182,6 +199,10 @@ void AdjustLocalGoal::adjust_local_goal(void)
         adjust_local_goal.pose.orientation.w = local_goal.pose.orientation.w;
         adjust_local_goal.header.frame_id = "base_link";
         local_goal_pub.publish(adjust_local_goal);
+
+        ROS_INFO_STREAM("=======================");
+        ROS_INFO_STREAM("change_goal");
+        ROS_INFO_STREAM(adjust_local_goal);
     }
 
     else

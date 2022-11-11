@@ -7,6 +7,8 @@
         <param name="DIVIDE" value="10" />
         <param name="MAP_COST_GAIN" value="1.0" />
         <param name="DISTANCE_GAIN" value="1.0" />
+        <param name="SAFE_GRID" value="50" />
+        <param name="ADJUST_DIS" value="1.5" />
 
         <remap from="local_goal" to="local_goal" />
         <remap from="local_map/expand" to="local_map/expand" />
